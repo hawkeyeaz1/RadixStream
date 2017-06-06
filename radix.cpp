@@ -34,6 +34,7 @@
 
 #define SIZE_CHANGE(L, F, T) (ceil(L * log10(F) / log10(T)))
 #define MIN(x, y) (x < y ? x : y)
+#define MAX(x, y) (x < y ? y : x)
 #define OPTION(a) (0x2D00 | (unsigned char)(a))
 
 using namespace std;
@@ -120,7 +121,9 @@ void base::init(uint32_t f, uint32_t t)
 
 void base::negotiatebase(uint32_t f, uint32_t t)
 {
-	_chunk_size = (uint16_t)SIZE_CHANGE(1, _from = f, _to = t);
+    _from = f;
+    _to = t;
+	_chunk_size = (uint16_t)SIZE_CHANGE(1, MAX(f, t), MIN(f, t));
 	if (_from < _to) { _reads = _chunk_size; _writes = 1; }
 	else { _writes = _chunk_size; _reads = 1; }
 	if(buffer.size() < (1 + (buffer.size() / _chunk_size))) buffer.resize(1 + (buffer.size() / _chunk_size)); // Round size up to nearest multiple of _chunk_size
@@ -419,13 +422,13 @@ int main(int argc, char *argv[])
 			case OPTION('l'): // From lowercase
 				b.setlowercase();
 				break;
-			case OPTION('u'): // From uppercase
+			case OPTION('U'): // From uppercase
 				b.setuppercase();
 				break;
 			case OPTION('L'): // To lowercase
 				b.inlowercase();
 				break;
-			case OPTION('U'): // To uppercase
+			case OPTION('u'): // To uppercase
 				b.inuppercase();
 				break;
 			case OPTION('a'): // Ascii/binary input mode
