@@ -17,7 +17,6 @@
 /* Note: This can be rather easily modified to support practically any radix to infinity by using a *good* big int library that supports log (yes! It isn't really that hard) and returns the count of bits used as a big int number. */
 
 // TODO: Testing various options... currently on -S "FEDCBA9876543210"
-// -A broken
 
 #include <streambuf>
 #include <algorithm>
