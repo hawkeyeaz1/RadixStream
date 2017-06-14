@@ -1,1 +1,3 @@
-Break out radix.cpp base::test() to it's own program and make it a thorough test.
+radix.cpp:
+  Break out base::test() to it's own program and make it a thorough test.
+  Optional zero() left pad?
