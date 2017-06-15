@@ -136,18 +136,26 @@ base::base(uint32_t f = 36, uint32_t t = 36, const string &fs = "", const string
 	in_case = inUpperCase;
 	out_case = outUpperCase;
 	if(f < 2 || t < 2) throw "Invalid radix";
-	if(fs.size() && fs.size() < f)
+	if(fs.size())
 	{
-	    cerr << "From radix string is too small--default used!" << endl;
-	    _fs.assign(bl.substr(0, f));
+	    if(fs.size() < f)
+	    {
+	        cerr << "From radix string is too small--default used!" << endl;
+	        _fs.assign(bl.substr(0, f));	        
+	    }
+	    else _fs.assign(fs);   
 	}
-	else _fs.assign(fs);
-	if(ts.size() && ts.size() < t)
+	else _fs.assign(bl.substr(0, f));
+	if(ts.size())
 	{
-	    cerr << "To radix string is too small--default used!" << endl;
-	    _ts.assign(bl.substr(0, t));
+	    if(ts.size() < t)
+	    {
+	        cerr << "To radix string is too small--default used!" << endl;
+	        _ts.assign(bl.substr(0, t));
+	    }
+	    else _ts.assign(ts);
 	}
-	else _ts.assign(ts);
+	else _ts.assign(bl.substr(0, t));
 	char2index.reserve(f);
 	index2char.reserve(t);
 	if(f > _fs.size() || t > _ts.size()) throw "Radix value inconsistent with radix string!";
