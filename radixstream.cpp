@@ -14,10 +14,6 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>. */
-// NOTE: This is NOT directly compatible with most base conversion methods as it is a stream converter and cannot use the whole number!
-/* Note: This can be rather easily modified to support practically any radix to infinity by using a big int library that returns the count of bits (i.e. log2) used as a big int number. Ensure log2 is big number compliant as well!*/
-
-//#define DEBUG
 
 #include <streambuf>
 #include <algorithm>
@@ -51,20 +47,22 @@ class base : public basic_streambuf<char>
 {
 public:
 	enum action { IGNORE, ZERO, QUIT, INFORM, EXIT, THROW };
+	enum flags { INLOWER = 0, INLOW = 0, INUPPER = 1, INUP = 1, INKEEP = 2, INNUMERIC = 4,
+							 OUTLOWER = 0, OUTLOW = 0, OUTUPPER = 8, OUTUP = 8, OUTKEEP = 16, OUTNUMERIC = 32 };
 private:
-	bool in_case, out_case;
+	bool in_case, out_case, in_keep_case, out_keep_case;
 	enum action action_invalid;
 	uint16_t _chunk_size, _reads, _writes;
 	uint32_t _from, _to;
 	vector<uint32_t> buffer;
 	unordered_map<uint32_t, uint32_t> char2index, index2char;
-	uint32_t forcecase(uint32_t c) { return out_case ? toupper(c) : tolower(c); }
-	unsigned char standardcase(unsigned char c) { return in_case ? toupper(c) : tolower(c); }
+	uint32_t forcecase(uint32_t c) { return out_keep_case ? c : out_case ? toupper(c) : tolower(c); }
+	unsigned char standardcase(unsigned char c) { return in_keep_case ? c : in_case ? toupper(c) : tolower(c); }
 	string bl;
 	void convert(vector<uint32_t>, vector<uint32_t> &);
 	void negotiatebase(uint32_t, uint32_t);
 public:
-	base(uint32_t, uint32_t, const string &, const string &, bool, bool, action);
+	base(uint32_t, uint32_t, const string &, const string &, flags, action);
 	/* Description: Sets map Char2Index from c2i string
 	 * Parameters:
 	 *	c2i: String of characters to use for the input character to number conversion
@@ -128,39 +126,39 @@ public:
  *	outUpperCase: Force output case to uppercase (otherwise lowercase)
  *	todo: Action to take when an invalid character is encountered
  */
-base::base(uint32_t f = 36, uint32_t t = 36, const string &fs = "", const string &ts = "", bool inUpperCase = true, bool outUpperCase = true, action todo = IGNORE)
+base::base(uint32_t f = 36, uint32_t t = 36, const string &fs = "", const string &ts = "", flags flag = (flags)(INUPPER | OUTUPPER), action invact = IGNORE)
 {
 	bl = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	string _fs(bl), _ts(bl);
-	setinvalid(todo);
-	in_case = inUpperCase;
-	out_case = outUpperCase;
+	setinvalid(invact);
+	if(!(in_keep_case = flag & INKEEP)) in_case = flag & INUPPER;
+	if(!(out_keep_case = flag & OUTKEEP)) out_case = flag & OUTUPPER;
+
 	if(f < 2 || t < 2) throw "Invalid radix";
-	if(fs.size())
-	{
-	    if(fs.size() < f)
-	    {
-	        cerr << "From radix string is too small--default used!" << endl;
-	        _fs.assign(bl.substr(0, f));	        
-	    }
-	    else _fs.assign(fs);   
-	}
-	else _fs.assign(bl.substr(0, f));
-	if(ts.size())
-	{
-	    if(ts.size() < t)
-	    {
-	        cerr << "To radix string is too small--default used!" << endl;
-	        _ts.assign(bl.substr(0, t));
-	    }
-	    else _ts.assign(ts);
-	}
-	else _ts.assign(bl.substr(0, t));
 	char2index.reserve(f);
 	index2char.reserve(t);
-	if(f > _fs.size() || t > _ts.size()) throw "Radix value inconsistent with radix string!";
-	for (uint32_t i = 0; i < _fs.size() && i < f; i++) char2index[standardcase(_fs[i])] = (uint32_t)i;
-	for (uint32_t i = 0; i < _ts.size() && i < t; i++) index2char[i] = standardcase(_ts[i]);
+	if(flag & INNUMERIC) for (uint64_t i = 0; i < f && i < f; i++) char2index[i] = (uint32_t)i;
+	else
+	{
+		if(!fs.size()) _fs.assign(fs);
+		else
+		{
+		  if(fs.size() < f) cerr << "From radix string is too small--default used!" << endl;
+    	_fs.assign(bl.substr(0, f));
+		}
+		for (uint32_t i = 0; i < _fs.size() && i < f; i++) char2index[standardcase(_fs[i])] = (uint32_t)i;
+	}
+	if(flag & OUTNUMERIC) for (uint64_t i = 0; i < t && i < t; i++) index2char[i] = (uint32_t)i;
+	else
+	{
+		if(!ts.size()) _ts.assign(ts);
+		else
+		{
+	 	 if(ts.size() < t) cerr << "To radix string is too small--default used!" << endl;
+   	 _ts.assign(bl.substr(0, t));
+		}
+		for (uint32_t i = 0; i < _ts.size() && i < t; i++) index2char[i] = standardcase(_ts[i]);
+	}
 	negotiatebase(f, t);
 }
 
@@ -293,6 +291,8 @@ int printHelp()
 		" fr[adix]                        tr[adix]\n"
 		" fs[tring]=X                     ts[tring]=X\n"
 		"    Default string is \"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ\"\n"
+		"Numeric (no string):\n"
+		" fn[ostring]                     tn[ostring]\n"
 		"Case:                     Note: From case is only useful with input radix string\n"
 		" fl[owercase]                    tl[owercase]\n"
 		" fu[ppercase]                    tu[ppercase]\n"
@@ -319,8 +319,9 @@ int printHelp()
 
 int main(int argc, char *argv[])
 {
-	bool asciiout = false, inUpperCase, outUpperCase;
-	base::action todo;
+	bool asciiout = false, keepCase, inUpperCase, outUpperCase;
+	base::action invact;
+	base::flags flag = (base::flags)(base::INLOWER | base::OUTLOWER);
 	int32_t r, _;
 	uint32_t f = 0, t = 0;
 	string s, fs, ts, bl = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -332,18 +333,14 @@ int main(int argc, char *argv[])
 		{
 			case 'fr': istringstream(s.substr(3)) >> f; break; // Set from radix
 			case 'tr': istringstream(s.substr(3)) >> t; break; // Set to radix
-			case 'fs':
-			    r = s.find_first_of('=', 2);
-			    fs.assign(s.substr(r >= 0 ? r + 1 : 0, s.length() - 1));
-			    break; // Set from string
-			case 'ts':
-			    r = s.find_first_of('=', 2);
-			    ts.assign(s.substr(r >= 0 ? r + 1 : 0, s.length() - 1));
-			    break; // Set to string
-			case 'fl': inUpperCase = false; break; // From lowercase
-			case 'tl': outUpperCase = false; break; // To lowercase
-			case 'fu': inUpperCase = true; break; // From uppercase
-			case 'tu': outUpperCase = true; break; // To uppercase
+			case 'fs': r = s.find_first_of('=', 2); fs.assign(s.substr(r >= 0 ? r + 1 : 0, s.length() - 1)); break; // Set from string
+			case 'ts': r = s.find_first_of('=', 2); ts.assign(s.substr(r >= 0 ? r + 1 : 0, s.length() - 1)); break; // Set to string
+			case 'fn': flag = (base::flags)(flag | base::INNUMERIC); break; // From numeric/no string
+			case 'tn': flag = (base::flags)(flag | base::OUTNUMERIC); break; // To numeric/no string
+			case 'fl': flag = (base::flags)((flag & ~base::INLOWER) | base::INLOWER); break; // From lowercase
+			case 'tl': flag = (base::flags)((flag & ~base::OUTLOWER) | base::INLOWER); break; // To lowercase
+			case 'fu': flag = (base::flags)((flag & ~base::INUPPER) | base::INUPPER); break; // From uppercase
+			case 'tu': flag = (base::flags)((flag & ~base::OUTUPPER) | base::OUTUPPER); break; // To uppercase
 			case 'fb': case 'f2': f =  2; if(!fs.size()) fs = bl.substr(0, f); break; // From binary
 			case 'tb': case 't2': t =  2; if(!ts.size()) ts = bl.substr(0, t); break; // To binary
 			case 'fo': case 'f8': f =  8; if(!fs.size()) fs = bl.substr(0, f); break; // From octal
@@ -356,20 +353,17 @@ int main(int argc, char *argv[])
 			case 'tt': case 'tH': ts = bl.substr(0, t = 36); break; // To hexatrigesimal (base 36)
 			case 'fa': case 'fe': fs.resize(256); for(_ = 0, f = 256; _ < 256; _++) fs[_] = (unsigned char)_; break; // Ascii/binary input mode
 			case 'ta': case 'te': ts.resize(256); for(_ = 0, asciiout = true, t = 256; _ < 256; _++) ts[_] = (unsigned char)_; break; // Ascii/binary output mode
-			case 'ig': case 'sk': case 'dr': case 'co': todo = base::IGNORE; break; // Ignore invalid characters in input (default)
-			case 'ze': case '0\0': todo = base::ZERO;   break; // Zero invalid characters in input
-			case 'qu': case 'X\0': case 'x\0': todo = base::QUIT;   break; // Quit read on invalid characters in input
-			case 'in': case 'se': case 'al': case 're': todo = base::INFORM; break; // Inform on stderr invalid characters in input
-			case 'ex': case 'er': case 'el': todo = base::EXIT;   break; // Exit (with error level) on invalid characters in input
-#ifdef DEBUG
-			case 'te': case 'rt': tests = true; // Run tests
-#endif
+			case 'ig': case 'sk': case 'dr': case 'co': invact = base::IGNORE; break; // Ignore invalid characters in input (default)
+			case 'ze': case '0\0': invact = base::ZERO;   break; // Zero invalid characters in input
+			case 'qu': case 'X\0': case 'x\0': invact = base::QUIT;   break; // Quit read on invalid characters in input
+			case 'in': case 'se': case 'al': case 're': invact = base::INFORM; break; // Inform on stderr invalid characters in input
+			case 'ex': case 'er': case 'el': invact = base::EXIT;   break; // Exit (with error level) on invalid characters in input
 			case 'h\0': case '?\0': default: return printHelp(); // Help
 		}
 	}
 	if(f < 2) { cout << "From radix not specified! " << endl; return 1; }
 	if(t < 2) { cout << "To radix not specified! Perhaps you specified from radix twice?" << endl; return 1; }
-	base b(f, t, fs, ts, inUpperCase, outUpperCase, todo);
+	base b(f, t, fs, ts, flag, invact);
 	string data(b.readsize(), '\0');
 	for(cin.read(&data[0], b.readsize()); r = cin.gcount(); cin.clear(), data.resize(b.readsize()), cin.read((char *)data.data(), b.readsize()))
 	{
