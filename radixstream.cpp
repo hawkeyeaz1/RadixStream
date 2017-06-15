@@ -48,7 +48,7 @@ class base : public basic_streambuf<char>
 public:
 	enum action { IGNORE, ZERO, QUIT, INFORM, EXIT, THROW };
 	enum flags { INLOWER = 0, INLOW = 0, INUPPER = 1, INUP = 1, INKEEP = 2, INNUMERIC = 4,
-							 OUTLOWER = 0, OUTLOW = 0, OUTUPPER = 8, OUTUP = 8, OUTKEEP = 16, OUTNUMERIC = 32 };
+	             OUTLOWER = 0, OUTLOW = 0, OUTUPPER = 8, OUTUP = 8, OUTKEEP = 16, OUTNUMERIC = 32 };
 private:
 	bool in_case, out_case, in_keep_case, out_keep_case;
 	enum action action_invalid;
