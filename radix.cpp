@@ -15,7 +15,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 // NOTE: This is NOT directly compatible with most base conversion methods as it is a stream converter and cannot use the whole number!
-/* Note: This can be rather easily modified to support practically any radix to infinity by using a big int library that returns the count of bits (i.e. log2) used as a big int number. */
+/* Note: This can be rather easily modified to support practically any radix to infinity by using a big int library that returns the count of bits (i.e. log2) used as a big int number. Ensure log2 is big number compliant as well!*/
 
 //#define DEBUG
 
