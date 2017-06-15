@@ -136,13 +136,13 @@ base::base(uint32_t f = 36, uint32_t t = 36, const string &fs = "", const string
 	in_case = inUpperCase;
 	out_case = outUpperCase;
 	if(f < 2 || t < 2) throw "Invalid radix";
-	if(fs.size() < f)
+	if(fs.size() && fs.size() < f)
 	{
 	    cerr << "From radix string is too small--default used!" << endl;
 	    _fs.assign(bl.substr(0, f));
 	}
 	else _fs.assign(fs);
-	if(ts.size() < t)
+	if(ts.size() && ts.size() < t)
 	{
 	    cerr << "To radix string is too small--default used!" << endl;
 	    _ts.assign(bl.substr(0, t));
