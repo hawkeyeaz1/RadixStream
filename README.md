@@ -1,5 +1,5 @@
 ## Radix Stream
-This takes a data stream and converts the radix from x to y. Radices can be anything from 2 up to about 4294967296*...
+This takes a data stream and converts the number in radix x to a number in radix y. Radices can be anything from 2 up to about 4294967296*...
 
 ## To compile:<br>
 - g++ -std=c++11 -Wno-multichar radixstream1.0.cpp -o radix
