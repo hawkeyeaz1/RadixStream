@@ -5,8 +5,7 @@ To compile:
 
 Example usage:
 
-cat radix | ./radix fa tx | less # This will let you view the hex dump of the binary itself
-
+cat radix | ./radix fa tx | less # This will let you view the hex dump of the binary itself<br>
 echo "1001" | ./radix fb td # 9
 
 echo "a4" | ./radix fx tb # 10100100
