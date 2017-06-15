@@ -2,7 +2,7 @@
 This takes a data stream and converts the number in radix x to a number in radix y. Radices can be anything from 2 up to about 4294967296*...
 
 ## To compile:<br>
-- g++ -std=c++11 -Wno-multichar radixstream1.0.cpp -o radix
+- g++ -std=c++11 -Wno-multichar radixstream.cpp -o radix
 
 ## Example usage:
 - cat radix | ./radix fa tx | less # This will let you view the hex dump of the binary itself<br>
