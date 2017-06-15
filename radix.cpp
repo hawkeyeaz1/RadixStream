@@ -34,7 +34,7 @@
 
 #define MIN(x, y) (x < y ? x : y)
 #define MAX(x, y) (x < y ? y : x)
-#define SIZE_CHANGE(F, T) (((FILog2(MAX(F, T)) << 1) / FILog2(MIN(F, T))) >> 1)
+#define SIZE_CHANGE(L, F, T) (L * ceil(log2(MAX(F, T)) / log2(MIN(F, T))))
 
 #define WC2UI16(c) ((*(uint16_t *)&c))
 #if('ab' == (('a' << 8) | 'b'))
@@ -52,15 +52,13 @@ class base : public basic_streambuf<char>
 public:
 	enum action { IGNORE, ZERO, QUIT, INFORM, EXIT, THROW };
 private:
-	bool in_case, upper_case;
+	bool in_case, out_case;
 	enum action action_invalid;
-	char FILogTab256[256];
 	uint16_t _chunk_size, _reads, _writes;
 	uint32_t _from, _to;
 	vector<uint32_t> buffer;
 	unordered_map<uint32_t, uint32_t> char2index, index2char;
-	uint32_t forcecase(uint32_t c) { return upper_case ? toupper(c) : tolower(c); }
-	uint32_t FILog2(uint64_t);
+	uint32_t forcecase(uint32_t c) { return out_case ? toupper(c) : tolower(c); }
 	unsigned char standardcase(unsigned char c) { return in_case ? toupper(c) : tolower(c); }
 	string bl;
 	void convert(vector<uint32_t>, vector<uint32_t> &);
@@ -112,8 +110,8 @@ public:
 	void inuppercase() { in_case = true; }
 	char zero() { return index2char[0]; } // For fill cases where zero is not the character '0'
 	void setinvalid(action a) { action_invalid = a; }
-	void setuppercase() { upper_case = true; in_case = false; }
-	void setlowercase() { upper_case = in_case = false; }
+	void setuppercase() { out_case = true; in_case = false; }
+	void setlowercase() { out_case = in_case = false; }
 #ifdef DEBUG
 	static void test();
 #endif
@@ -133,20 +131,29 @@ public:
 base::base(uint32_t f = 36, uint32_t t = 36, const string &fs = "", const string &ts = "", bool inUpperCase = true, bool outUpperCase = true, action todo = IGNORE)
 {
 	bl = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	string _fs, _ts;
+	string _fs(bl), _ts(bl);
 	setinvalid(todo);
 	in_case = inUpperCase;
-	upper_case = outUpperCase;
+	out_case = outUpperCase;
 	if(f < 2 || t < 2) throw "Invalid radix";
-	if(fs.size() < f) _fs.assign(bl.substr(0, f)); else _fs.assign(fs);
-	if(ts.size() < t) _ts.assign(bl.substr(0, t)); else _ts.assign(ts);
-	if(f > _fs.size() || t > _ts.size()) throw "Radix value inconsistent with radix string!";
-	for (uint32_t i = 0; i < bl.size(); i++) index2char[char2index[standardcase(bl[i])] = (uint32_t)i] = standardcase(bl[i]);
-	FILogTab256[0] = FILogTab256[1] = 1; // We still need 1 character 'digit' for '0'
-	for (uint16_t i = 2; i < sizeof(FILogTab256); i++) FILogTab256[i] = 1 + FILogTab256[i >> 1];
-	negotiatebase(f, t);
+	if(fs.size() < f)
+	{
+	    cerr << "From radix string is too small--default used!" << endl;
+	    _fs.assign(bl.substr(0, f));
+	}
+	else _fs.assign(fs);
+	if(ts.size() < t)
+	{
+	    cerr << "To radix string is too small--default used!" << endl;
+	    _ts.assign(bl.substr(0, t));
+	}
+	else _ts.assign(ts);
 	char2index.reserve(f);
 	index2char.reserve(t);
+	if(f > _fs.size() || t > _ts.size()) throw "Radix value inconsistent with radix string!";
+	for (uint32_t i = 0; i < _fs.size() && i < f; i++) char2index[standardcase(_fs[i])] = (uint32_t)i;
+	for (uint32_t i = 0; i < _ts.size() && i < t; i++) index2char[i] = standardcase(_ts[i]);
+	negotiatebase(f, t);
 }
 
 /* Description: Sets related variables based on input, output radix ratios
@@ -156,29 +163,17 @@ base::base(uint32_t f = 36, uint32_t t = 36, const string &fs = "", const string
  */
 void base::negotiatebase(uint32_t f, uint32_t t)
 {
+	uint32_t z = 1;
 	_from = f;
 	_to = t;
-	_chunk_size = (uint16_t)SIZE_CHANGE(f, t); // We take max, min to ensure the ratio is not fractional
-	if (_from < _to) { _reads = _chunk_size; _writes = 1; }
-	else { _writes = _chunk_size; _reads = 1; }
+	_chunk_size = (uint16_t)SIZE_CHANGE(z, f, t); // We take max, min to ensure the ratio is not fractional
+	if (_from < _to) { _reads = _chunk_size; _writes = z; }
+	else { _writes = _chunk_size; _reads = z; }
 	if(buffer.size() < (1 + (buffer.size() / _chunk_size))) buffer.resize(1 + (buffer.size() / _chunk_size)); // Round size up to nearest multiple of _chunk_size
 }
 
-/* Description: Modified log2 ("floor integer") for determining how many digits we need to reserve space for
- * Parameter: v: Value to get the log of
- */
-uint32_t base::FILog2(uint64_t v)
-{
-	register uint8_t t;
-	register uint16_t r;
-	if (t = v >> 24) return 24 + FILogTab256[t]; 
-	if (t = v >> 16) return 16 + FILogTab256[t]; 
-	if (t = v >> 8) return 8 + FILogTab256[t];
-	return FILogTab256[v];
-}
-
 #define OPLSFN vector<uint32_t> in(v.begin(), v.end()); convert(in, buffer); return *this
-base &base::operator <<(uint64_t u) { vector<uint32_t> x(1); x[0] = u; buffer.resize(x.size() * SIZE_CHANGE(_from, _to)); convert(x, buffer); return *this; }
+base &base::operator <<(uint64_t u) { vector<uint32_t> x(1); x[0] = u; buffer.resize(SIZE_CHANGE(x.size(), _from, _to)); convert(x, buffer); return *this; }
 base &base::operator <<(vector<uint8_t> v) { OPLSFN; }
 base &base::operator <<(vector<uint16_t> v) { OPLSFN; }
 base &base::operator <<(vector<uint32_t> v) { convert(v, buffer); return *this; }
@@ -214,7 +209,14 @@ base &base::operator = (vector<uint8_t> &v)  { OPEQFN(v); }
 base &base::operator = (vector<uint16_t> &v) { OPEQFN(v); }
 base &base::operator = (vector<uint32_t> &v) { OPEQFN(v); }
 base &base::operator = (vector<uint64_t> &v) { OPEQFN(v); }
-base &base::operator = (const string s) { OPEQFN(s); } // TODO: This needs to force case!!
+base &base::operator = (const string s)
+{
+    vector<uint32_t> in(s.size());
+    for (uint32_t i = 0; i < in.size(); i++) in[i] = char2index[forcecase(s[i])];
+    buffer.clear();
+    convert(in, buffer);
+    return *this;
+}
 #define OPRSFN v.assign(buffer.begin(), buffer.end()); return *this
 base &base::operator >>(uint64_t &u) { u = buffer.front(); buffer.erase(buffer.begin(), buffer.begin() + 1);  return *this; }
 base &base::operator >>(vector<uint8_t> &v)  { OPRSFN; }
@@ -260,39 +262,13 @@ void base::convert(vector<uint32_t> in, vector<uint32_t> &out)
 {
 	int64_t a, i, t, x, z;
 	out.clear();
-	out.resize(in.size() * (uint32_t)SIZE_CHANGE(_from, _to));
+	out.resize((uint32_t)SIZE_CHANGE(in.size(), _from, _to));
 	while (in.size() > 1 && in[0] == 0) in.erase(in.begin(), in.begin() + 1); // Remove leading zeros; Alt: in.erase(in.begin(), in.begin() + min(in.find_first_not_of('0'), in.size() - 1));
 	for (i = in.size() - 1, x = 1; i >= 0; i--, x *= _from)
-		for (a = x * in[i], t = out.size() - 1; a > 0 && t >= 0; a += out[t], out[t--] = a % _to, a /= _to);
+		for (a = x * in[i], t = out.size() - 1; a > 0; a += out[t], out[t > 0 ? t-- : 0] = a % _to, a /= _to);
 	while (out.size() > 1 && out[0] == 0) out.erase(out.begin(), out.begin() + 1); // Remove leading zeros; Alt: out.erase(out.begin(), out.begin() + min(out.find_first_not_of('\0'), out.size() - 1));
 }
 
-#ifdef DEBUG
-void base::test()
-{
-	string out, s = "F00";
-	base b(16, 2);
-	cout << "From base: " << b.frombase() << endl << "To base: " << b.tobase() << endl << endl;
-
-	uint8_t u = 0xF;
-	b << u;
-	b >> out;
-	cout << "Char result: " << std::hex << (uint16_t)u << std::dec << " -> " << out << endl;
-
-	uint32_t ui[4] = { 1, 0, 0, 0 };
-	vector<uint32_t> vui(ui, ui + sizeof(ui) / sizeof(ui[0]));
-	b << vui;
-	b >> out;
-	cout << "Int vector result: " << vui[0];
-	for(uint16_t i = 1; i < vui.size(); i++) cout << ", " << vui[i];
-	cout << " -> " << out << endl;
-
-	b << s;
-	b >> out;
-	cout << "String result: " << '_' << b.frombase() << ':' << s << " -> " << '_' << b.tobase() << ':' << out << endl;
-	cout << "Testing complete!\n";
-}
-#endif
 int printHelp()
 {
 	cout <<
@@ -328,9 +304,6 @@ int printHelp()
 		" in[form], dr[op]       Inform on stderr, ignore and continue\n"
 		" ex[it], er[ror]        Exit program with error level 1 (abnormal exit)\n"
 		"\n"
-#ifdef DEBUG
-		" [-]te[st]                 Verify with tests\n"
-#endif
 		" -h, [-]he[lp]             Help\n"
 		"\n";
 	return 0;
@@ -339,9 +312,6 @@ int printHelp()
 int main(int argc, char *argv[])
 {
 	bool asciiout = false, inUpperCase, outUpperCase;
-#ifdef DEBUG
-	bool tests = false;
-#endif
 	base::action todo;
 	int32_t r, _;
 	uint32_t f = 0, t = 0;
@@ -355,32 +325,30 @@ int main(int argc, char *argv[])
 			case 'fr': istringstream(s.substr(3)) >> f; break; // Set from radix
 			case 'tr': istringstream(s.substr(3)) >> t; break; // Set to radix
 			case 'fs':
-			    r = s.find_first_of('=', 3);
-			    bl = s.substr(r + 1, s.length() - 1);
-			    fs.assign(bl);
+			    r = s.find_first_of('=', 2);
+			    fs.assign(s.substr(r >= 0 ? r + 1 : 0, s.length() - 1));
 			    break; // Set from string
 			case 'ts':
-			    r = s.find_first_of('=', 3);
-			    bl = s.substr(r + 1, s.length() - 1);
-			    ts.assign(bl);
+			    r = s.find_first_of('=', 2);
+			    ts.assign(s.substr(r >= 0 ? r + 1 : 0, s.length() - 1));
 			    break; // Set to string
 			case 'fl': inUpperCase = false; break; // From lowercase
 			case 'tl': outUpperCase = false; break; // To lowercase
 			case 'fu': inUpperCase = true; break; // From uppercase
 			case 'tu': outUpperCase = true; break; // To uppercase
-			case 'fb': case 'f2': fs = bl.substr(0, f =  2); break; // From binary
-			case 'tb': case 't2': ts = bl.substr(0, t =  2); break; // To binary
-			case 'fo': case 'f8': fs = bl.substr(0, f =  8); break; // From octal
-			case 'to': case 't8': ts = bl.substr(0, t =  8); break; // To octal
-			case 'fd': case 'f1': fs = bl.substr(0, f = 10); break; // From decimal
-			case 'td': case 't1': ts = bl.substr(0, t = 10); break; // To decimal
-			case 'fh': case 'fx': fs = bl.substr(0, f = 16); break; // From hexadecimal
-			case 'th': case 'tx': ts = bl.substr(0, t = 16); break; // To hexadecimal
+			case 'fb': case 'f2': f =  2; if(!fs.size()) fs = bl.substr(0, f); break; // From binary
+			case 'tb': case 't2': t =  2; if(!ts.size()) ts = bl.substr(0, t); break; // To binary
+			case 'fo': case 'f8': f =  8; if(!fs.size()) fs = bl.substr(0, f); break; // From octal
+			case 'to': case 't8': t =  8; if(!ts.size()) ts = bl.substr(0, t); break; // To octal
+			case 'fd': case 'f1': f = 10; if(!fs.size()) fs = bl.substr(0, f); break; // From decimal
+			case 'td': case 't1': t = 10; if(!ts.size()) ts = bl.substr(0, t); break; // To decimal
+			case 'fh': case 'fx': f = 16; if(!fs.size()) fs = bl.substr(0, f); break; // From hexadecimal
+			case 'th': case 'tx': t = 16; if(!ts.size()) ts = bl.substr(0, f); break; // To hexadecimal
 			case 'ft': case 'fH': case 'f3': fs = bl.substr(0, f = 36); break; // From hexatrigesimal (base 36)
 			case 'tt': case 'Ht': ts = bl.substr(0, t = 36); break; // To hexatrigesimal (base 36)
 			case 'fa': case 'fe': fs.resize(256); for(_ = 0, f = 256; _ < 256; _++) fs[_] = (unsigned char)_; break; // Ascii/binary input mode
 			case 'ta': case 'te': ts.resize(256); for(_ = 0, asciiout = true, t = 256; _ < 256; _++) ts[_] = (unsigned char)_; break; // Ascii/binary output mode
-			case 'ig': case 'sk': case 'dr': todo = base::IGNORE; break; // Ignore invalid characters in input (default)
+			case 'ig': case 'sk': case 'dr': case 'co': todo = base::IGNORE; break; // Ignore invalid characters in input (default)
 			case 'ze': case '0\0': todo = base::ZERO;   break; // Zero invalid characters in input
 			case 'qu': case 'X\0': case 'x\0': todo = base::QUIT;   break; // Quit read on invalid characters in input
 			case 'in': case 'se': case 'al': case 're': todo = base::INFORM; break; // Inform on stderr invalid characters in input
@@ -395,13 +363,6 @@ int main(int argc, char *argv[])
 	if(t < 2) { cout << "To radix not specified! Perhaps you specified from radix twice?" << endl; return 1; }
 	base b(f, t, fs, ts, inUpperCase, outUpperCase, todo);
 	string data(b.readsize(), '\0');
-#ifdef DEBUG
-	if(tests)
-	{
-		b.test();
-		return 0;
-	}
-#endif
 	for(cin.read(&data[0], b.readsize()); r = cin.gcount(); cin.clear(), data.resize(b.readsize()), cin.read((char *)data.data(), b.readsize()))
 	{
 		data.resize(r);
