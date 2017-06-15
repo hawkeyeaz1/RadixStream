@@ -353,7 +353,7 @@ int main(int argc, char *argv[])
 			case 'fh': case 'fx': f = 16; if(!fs.size()) fs = bl.substr(0, f); break; // From hexadecimal
 			case 'th': case 'tx': t = 16; if(!ts.size()) ts = bl.substr(0, f); break; // To hexadecimal
 			case 'ft': case 'fH': case 'f3': fs = bl.substr(0, f = 36); break; // From hexatrigesimal (base 36)
-			case 'tt': case 'Ht': ts = bl.substr(0, t = 36); break; // To hexatrigesimal (base 36)
+			case 'tt': case 'tH': ts = bl.substr(0, t = 36); break; // To hexatrigesimal (base 36)
 			case 'fa': case 'fe': fs.resize(256); for(_ = 0, f = 256; _ < 256; _++) fs[_] = (unsigned char)_; break; // Ascii/binary input mode
 			case 'ta': case 'te': ts.resize(256); for(_ = 0, asciiout = true, t = 256; _ < 256; _++) ts[_] = (unsigned char)_; break; // Ascii/binary output mode
 			case 'ig': case 'sk': case 'dr': case 'co': todo = base::IGNORE; break; // Ignore invalid characters in input (default)
