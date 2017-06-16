@@ -232,13 +232,7 @@ base &base::operator >>(string &s)
 {
 	s.clear();
 	s.resize(buffer.size());
-	for (uint32_t i = 0; i < buffer.size(); i++)
-	{
-	    uint32_t x = buffer[i],
-	    y = index2char[x],
-	    z = forcecase(y);
-	    s[i] = z;
-	}
+	for (uint32_t i = 0; i < buffer.size(); i++) s[i] = forcecase(index2char[buffer[i]]);
 	return *this;
 }
 base::operator vector<uint8_t>()  { vector<uint8_t> b(buffer.begin(), buffer.end()); return b; }
