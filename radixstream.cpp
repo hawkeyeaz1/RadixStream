@@ -55,9 +55,9 @@ private:
 	uint16_t _chunk_size, _reads, _writes;
 	uint32_t _from, _to;
 	vector<uint32_t> buffer;
-	unordered_map<uint32_t, uint32_t> char2index, index2char;
+	vector<char32_t> index2char, char2index;
 	uint32_t forcecase(uint32_t c) { return out_keep_case ? c : out_case ? toupper(c) : tolower(c); }
-	unsigned char standardcase(unsigned char c) { return in_keep_case ? c : in_case ? toupper(c) : tolower(c); }
+	char32_t standardcase(unsigned char c) { return (char32_t)(in_keep_case ? c : in_case ? toupper(c) : tolower(c)); }
 	string bl;
 	void convert(vector<uint32_t>, vector<uint32_t> &);
 	void negotiatebase(uint32_t, uint32_t);
@@ -101,7 +101,7 @@ public:
 
 	uint32_t frombase(uint32_t f = 0) { if (f > 1) negotiatebase(_from = f, _to); return _from; }
 	uint32_t tobase(uint32_t t = 0) { if (t > 1) negotiatebase(_from, _to = t); return _to; }
-	uint32_t readsize() { return _reads; }
+	uint32_t readsize() { return _reads; } ///////uint32_t z = ceil(log2(f) / 8);
 	uint32_t writesize() { return _writes; }
 
 	void inlowercase() { in_case = false; }
@@ -110,9 +110,7 @@ public:
 	void setinvalid(action a) { action_invalid = a; }
 	void setuppercase() { out_case = true; in_case = false; }
 	void setlowercase() { out_case = in_case = false; }
-#ifdef DEBUG
-	static void test();
-#endif
+
 	friend ostream &operator <<(ostream &, base &);
 	friend istream &operator >>(istream &, base &);
 };
@@ -133,30 +131,31 @@ base::base(uint32_t f = 36, uint32_t t = 36, const string &fs = "", const string
 	setinvalid(invact);
 	if(!(in_keep_case = flag & INKEEP)) in_case = flag & INUPPER;
 	if(!(out_keep_case = flag & OUTKEEP)) out_case = flag & OUTUPPER;
-
+	if(!in_case && f > 36) in_keep_case = true;
+	if(!out_case && t > 36) out_keep_case = true;
 	if(f < 2 || t < 2) throw "Invalid radix";
-	char2index.reserve(f);
-	index2char.reserve(t);
-	if(flag & INNUMERIC) for (uint64_t i = 0; i < f && i < f; i++) char2index[i] = (uint32_t)i;
+	char2index.resize(f);
+	index2char.resize(t);
+	if(flag & INNUMERIC) for (uint64_t i = 0; i < f && i < f; i++) char2index[i] = i;
 	else
 	{
-		if(!fs.size()) _fs.assign(fs);
-		else
+		if(fs.size())
 		{
-		  if(fs.size() < f) cerr << "From radix string is too small--default used!" << endl;
-    	_fs.assign(bl.substr(0, f));
+			if(fs.size() < f) cerr << "From radix string is too small--default used!" << endl;
+			_fs.assign(fs);
 		}
-		for (uint32_t i = 0; i < _fs.size() && i < f; i++) char2index[standardcase(_fs[i])] = (uint32_t)i;
+		else _fs.assign(bl.substr(0, f));
+		for (uint32_t i = 0; i < _fs.size() && i < f; i++) char2index[standardcase(_fs[i])] = i;
 	}
-	if(flag & OUTNUMERIC) for (uint64_t i = 0; i < t && i < t; i++) index2char[i] = (uint32_t)i;
+	if(flag & OUTNUMERIC) for (uint64_t i = 0; i < t && i < t; i++) index2char[i] = i;
 	else
 	{
-		if(!ts.size()) _ts.assign(ts);
-		else
+		if(ts.size())
 		{
-	 	 if(ts.size() < t) cerr << "To radix string is too small--default used!" << endl;
-   	 _ts.assign(bl.substr(0, t));
+			if(ts.size() < t) cerr << "To radix string is too small--default used!" << endl;
+			_ts.assign(ts);
 		}
+		else _ts.assign(bl.substr(0, t));
 		for (uint32_t i = 0; i < _ts.size() && i < t; i++) index2char[i] = standardcase(_ts[i]);
 	}
 	negotiatebase(f, t);
@@ -169,12 +168,12 @@ base::base(uint32_t f = 36, uint32_t t = 36, const string &fs = "", const string
  */
 void base::negotiatebase(uint32_t f, uint32_t t)
 {
-	uint32_t z = 1;
+	uint32_t bpd = ceil(log2(f) / 8);
 	_from = f;
 	_to = t;
-	_chunk_size = (uint16_t)SIZE_CHANGE(z, f, t); // We take max, min to ensure the ratio is not fractional
-	if (_from < _to) { _reads = _chunk_size; _writes = z; }
-	else { _writes = _chunk_size; _reads = z; }
+	_chunk_size = (uint16_t)SIZE_CHANGE(1, f, t); // We take max, min to ensure the ratio is not fractional
+	if (_from < _to) { _reads = _chunk_size; _writes = bpd; }
+	else { _writes = _chunk_size; _reads = bpd; }
 	if(buffer.size() < (1 + (buffer.size() / _chunk_size))) buffer.resize(1 + (buffer.size() / _chunk_size)); // Round size up to nearest multiple of _chunk_size
 }
 
@@ -233,7 +232,13 @@ base &base::operator >>(string &s)
 {
 	s.clear();
 	s.resize(buffer.size());
-	for (uint32_t i = 0; i < buffer.size(); i++) s[i] = forcecase(index2char[buffer[i]]);
+	for (uint32_t i = 0; i < buffer.size(); i++)
+	{
+	    uint32_t x = buffer[i],
+	    y = index2char[x],
+	    z = forcecase(y);
+	    s[i] = z;
+	}
 	return *this;
 }
 base::operator vector<uint8_t>()  { vector<uint8_t> b(buffer.begin(), buffer.end()); return b; }
@@ -365,7 +370,7 @@ int main(int argc, char *argv[])
 	if(t < 2) { cout << "To radix not specified! Perhaps you specified from radix twice?" << endl; return 1; }
 	base b(f, t, fs, ts, flag, invact);
 	string data(b.readsize(), '\0');
-	for(cin.read(&data[0], b.readsize()); r = cin.gcount(); cin.clear(), data.resize(b.readsize()), cin.read((char *)data.data(), b.readsize()))
+	for(cin.read(&data[0], b.readsize()); r = cin.gcount(); cin.clear(), data.resize(b.readsize()), cin.read(&data[0], b.readsize()))
 	{
 		data.resize(r);
 		b << data;
@@ -373,7 +378,7 @@ int main(int argc, char *argv[])
 		if(MIN(data.size(), b.writesize()))
 		{
 			for(_ = b.writesize() - data.size(); _ > 0; _--) cout << b.zero(); // Zero pad
-			cout.write(&data[0], MIN(data.size(), b.writesize()));
+			cout.write(&data[0], data.size());
 		}
 	}
 	cout << flush << flush;
