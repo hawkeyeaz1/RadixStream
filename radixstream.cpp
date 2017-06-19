@@ -14,9 +14,9 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>. */
-
+// char2index lookup not liking out of bounds character indexes
 #include <streambuf>
-#include <algorithm>
+//#include <algorithm>
 #include <sstream>
 #include <iostream>
 #include <unordered_map>
@@ -54,8 +54,8 @@ private:
 	enum action action_invalid;
 	uint16_t _chunk_size, _reads, _writes;
 	uint32_t _from, _to;
-	vector<uint32_t> buffer;
-	vector<char32_t> index2char, char2index;
+	vector<uint32_t> buffer, index2char;
+	unordered_map<char32_t, uint32_t> char2index;
 	uint32_t forcecase(uint32_t c) { return out_keep_case ? c : out_case ? toupper(c) : tolower(c); }
 	char32_t standardcase(unsigned char c) { return (char32_t)(in_keep_case ? c : in_case ? toupper(c) : tolower(c)); }
 	string bl;
@@ -67,7 +67,7 @@ public:
 	 * Parameters:
 	 *	c2i: String of characters to use for the input character to number conversion
 	 */
-	void setchar2index(string c2i) { char2index.clear(); for (uint32_t i = 0; i < c2i.size(); i++) char2index[standardcase(c2i[standardcase(i)])] = (uint32_t)i; }
+	void setchar2index(string c2i) { char2index.clear(); for (uint32_t i = 0; i < c2i.size(); i++) char2index[standardcase(c2i[standardcase(i)])] = i; }
 	/* Description: Sets map Index2Char from i2c string
 	 * Parameters:
 	 *	i2c: String of characters to use for the output character to number conversion
@@ -134,7 +134,7 @@ base::base(uint32_t f = 36, uint32_t t = 36, const string &fs = "", const string
 	if(!in_case && f > 36) in_keep_case = true;
 	if(!out_case && t > 36) out_keep_case = true;
 	if(f < 2 || t < 2) throw "Invalid radix";
-	char2index.resize(f);
+	char2index.reserve(f);
 	index2char.resize(t);
 	if(flag & INNUMERIC) for (uint64_t i = 0; i < f && i < f; i++) char2index[i] = i;
 	else
@@ -188,7 +188,7 @@ base &base::operator <<(string s)
 	vector<uint32_t> in(s.size());
 	for (uint32_t i = 0, o = 0; i < s.size(); i++)
 	{
-		try { in[i - o] = char2index.at(standardcase(s[i])); }
+		try { in[i - o] = char2index[standardcase(s[i])]; }
 		catch(out_of_range)
 		{
 			switch(action_invalid)
